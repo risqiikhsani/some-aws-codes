@@ -35,7 +35,7 @@ def check_authorization(comment_id, user):
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
     http_method = event['httpMethod']
-    if http_method == 'comment':
+    if http_method == 'POST':
         return create_comment(event)
     elif http_method == 'GET':
         if 'pathParameters' in event and event['pathParameters'] is not None and 'id' in event['pathParameters']:
