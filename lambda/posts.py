@@ -11,7 +11,24 @@ logger.setLevel("INFO")
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('posts')
 
+def check_authorization(post_id, user):
+    try:
+        # Retrieve the post to check ownership
+        response = table.get_item(Key={'id': post_id})
+        if 'Item' not in response:
+            logger.info(f"Post not found with ID: {post_id}")
+            return False, 'Post not found'
 
+        post = response['Item']
+        if post['user'] != user:
+            logger.warning(f"User {user} is not authorized to modify post with ID: {post_id}")
+            return False, 'Unauthorized'
+        
+        return True, None
+    except ClientError as e:
+        logger.error(f"Error checking authorization: {e}")
+        return False, f'Error checking authorization: {e}'
+        
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
     http_method = event['httpMethod']
@@ -36,7 +53,7 @@ def create_post(event):
     data = json.loads(event['body'])
     post_id = str(uuid.uuid4())
     text = data['text']
-    user = "usertest"
+    user = event["requestContext"]["authorizer"]["claims"]["sub"]
     
     try:
         table.put_item(Item={
@@ -82,8 +99,11 @@ def update_post(event):
     logger.info("Updating a post")
     data = json.loads(event['body'])
     post_id = event['pathParameters']['id']
-    # text = body['text']
-    # user = body['user']
+    user = event["requestContext"]["authorizer"]["claims"]["sub"]
+    
+    authorized, error = check_authorization(post_id, user)
+    if not authorized:
+        return response_payload(error, None)
     
     update_expression = "SET "
     expression_attribute_values = {}
@@ -115,6 +135,11 @@ def update_post(event):
 def delete_post(event):
     logger.info("Deleting a post")
     post_id = event['pathParameters']['id']
+    user = event["requestContext"]["authorizer"]["claims"]["sub"]
+    
+    authorized, error = check_authorization(post_id, user)
+    if not authorized:
+        return response_payload(error, None)
     
     try:
         table.delete_item(Key={'id': post_id})
