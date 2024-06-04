@@ -37,13 +37,30 @@ def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
     http_method = event['httpMethod']
     if http_method == 'GET':
-        if event["path"] == "/like":
+        if event["path"] == "/add":
             return create_like(event)
-        elif event["path"] == "/dislike":
+        elif event["path"] == "/remove":
             return delete_like(event)
+        elif event["path"] == "/mine":
+            return list_likes(event)
     else:
         logger.error(f"Unsupported HTTP method: {http_method}")
         return response_payload("Method Not Allowed", None)
+        
+def list_likes(event):
+    logger.info("Listing all user likes")
+    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
+    
+    try:
+        response = table.scan(
+            FilterExpression=Attr('user').eq(user)
+        )
+        logger.info(f"Found {len(response['Items'])} likes for user {user}")
+        return response_payload(None, response['Items'])
+    except ClientError as e:
+        logger.error(f"Error listing likes for user {user}: {e}")
+        return response_payload(f'Error listing likes for user {user}: {e}', None)
+
 
 
 def create_like(event):
@@ -62,7 +79,7 @@ def create_like(event):
 
     like_id = str(uuid.uuid4())
     time_creation = datetime.utcnow().isoformat()
-    user = event["requestContext"]["authorizer"]["claims"]["sub"]
+    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
     
     try:
         table.put_item(Item={
@@ -82,8 +99,10 @@ def create_like(event):
     
 def delete_like(event):
     logger.info("Delete like")
-    # Extract post_id from query parameters
-
+    # authorized, error = check_authorization(post_id, user)
+    # if not authorized:
+    #     return response_payload(error, None)
+    
     # Extract post_id and like_id from query parameters
     post_id = event['queryStringParameters'].get('post_id', '')
     like_id = event['queryStringParameters'].get('like_id', '')
@@ -94,7 +113,7 @@ def delete_like(event):
         logger.error(error_message)
         return response_payload(error_message, None)
 
-    user = event["requestContext"]["authorizer"]["claims"]["sub"]
+    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
     
     try:
         if like_id:
