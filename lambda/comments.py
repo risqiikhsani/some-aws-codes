@@ -3,6 +3,7 @@ import uuid
 import boto3
 from botocore.exceptions import ClientError
 import logging
+from datetime import datetime
 
 # Set up logging
 logger = logging.getLogger()
@@ -64,13 +65,15 @@ def create_comment(event):
     data = json.loads(event['body'])
     comment_id = str(uuid.uuid4())
     text = data['text']
-    user = event["requestContext"]["authorizer"]["claims"]["sub"]
+    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
+    time_creation = datetime.utcnow().isoformat()
     
     try:
         table.put_item(Item={
         'id': comment_id, 
         'text': text, 
         'post_id':post_id,
+        'time_creation':time_creation,
         'user': user, })
         logger.info(f"comment created successfully with ID: {comment_id}")
         return response_payload(None, 'comment created successfully')
@@ -124,9 +127,9 @@ def update_comment(event):
     comment_id = event['pathParameters']['id']
     user = event["requestContext"]["authorizer"]["claims"]["sub"]
     
-    authorized, error = check_authorization(comment_id, user)
-    if not authorized:
-        return response_payload(error, None)
+    # authorized, error = check_authorization(comment_id, user)
+    # if not authorized:
+    #     return response_payload(error, None)
     
     update_expression = "SET "
     expression_attribute_values = {}
@@ -161,9 +164,9 @@ def delete_comment(event):
     comment_id = event['pathParameters']['id']
     user = event["requestContext"]["authorizer"]["claims"]["sub"]
     
-    authorized, error = check_authorization(comment_id, user)
-    if not authorized:
-        return response_payload(error, None)
+    # authorized, error = check_authorization(comment_id, user)
+    # if not authorized:
+    #     return response_payload(error, None)
     
     try:
         table.delete_item(Key={'id': comment_id})
