@@ -3,6 +3,7 @@ import uuid
 import boto3
 from botocore.exceptions import ClientError
 import logging
+from datetime import datetime
 
 # Set up logging
 logger = logging.getLogger()
@@ -53,12 +54,14 @@ def create_post(event):
     data = json.loads(event['body'])
     post_id = str(uuid.uuid4())
     text = data['text']
-    user = event["requestContext"]["authorizer"]["claims"]["sub"]
+    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
+    time_creation = datetime.utcnow().isoformat()
     
     try:
         table.put_item(Item={
         'id': post_id, 
-        'text': text, 
+        'text': text,
+        'time_creation':time_creation,
         'user': user, })
         logger.info(f"Post created successfully with ID: {post_id}")
         return response_payload(None, 'Post created successfully')
@@ -101,9 +104,9 @@ def update_post(event):
     post_id = event['pathParameters']['id']
     user = event["requestContext"]["authorizer"]["claims"]["sub"]
     
-    authorized, error = check_authorization(post_id, user)
-    if not authorized:
-        return response_payload(error, None)
+    # authorized, error = check_authorization(post_id, user)
+    # if not authorized:
+    #     return response_payload(error, None)
     
     update_expression = "SET "
     expression_attribute_values = {}
@@ -137,9 +140,9 @@ def delete_post(event):
     post_id = event['pathParameters']['id']
     user = event["requestContext"]["authorizer"]["claims"]["sub"]
     
-    authorized, error = check_authorization(post_id, user)
-    if not authorized:
-        return response_payload(error, None)
+    # authorized, error = check_authorization(post_id, user)
+    # if not authorized:
+    #     return response_payload(error, None)
     
     try:
         table.delete_item(Key={'id': post_id})
