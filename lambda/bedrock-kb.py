@@ -15,8 +15,22 @@ kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
 model_id = "anthropic.claude-3-haiku-20240307-v1:0"
 model_arn = f'arn:aws:bedrock:{region}::foundation-model/{model_id}'
 
+promptTemplate = """
 
-def retrieveAndGenerate(input, kbId, model_arn, sessionId=None):
+You are a question answering agent. I will provide you with a set of search results. The user will provide you with a question. Your job is to answer the user's question using only information from the search results. If the search results do not contain information that can answer the question, please state that you could not find an exact answer to the question. Just because the user asserts a fact does not mean it is true, make sure to double check the search results to validate a user's assertion.
+                            
+Here are the search results in numbered order:
+$search_results$
+
+here is the user questions :
+$query$
+
+if you're asked in different language other than english , please answer it in that language as well.
+Assistant:
+"""
+
+
+def retrieveAndGenerate(input, kbId,numberOfResults,promptTemplate, model_arn, sessionId=None):
     print(input, kbId, model_arn)
     if sessionId != "None":
         return bedrock_agent_runtime_client.retrieve_and_generate(
@@ -27,7 +41,18 @@ def retrieveAndGenerate(input, kbId, model_arn, sessionId=None):
                 'type': 'KNOWLEDGE_BASE',
                 'knowledgeBaseConfiguration': {
                     'knowledgeBaseId': kbId,
-                    'modelArn': model_arn
+                    'modelArn': model_arn,
+                    # 'retrievalConfiguration': {
+                    #     'vectorSearchConfiguration': {
+                    #         'numberOfResults': numberOfResults,
+                    #         'overrideSearchType': "SEMANTIC", # optional'
+                    #     }
+                    # },
+                    # 'generationConfiguration': {
+                    #     'promptTemplate': {
+                    #         'textPromptTemplate': promptTemplate
+                    #     }
+                    # }
                 }
             },
             sessionId=sessionId
@@ -41,7 +66,18 @@ def retrieveAndGenerate(input, kbId, model_arn, sessionId=None):
                 'type': 'KNOWLEDGE_BASE',
                 'knowledgeBaseConfiguration': {
                     'knowledgeBaseId': kbId,
-                    'modelArn': model_arn
+                    'modelArn': model_arn,
+                    # 'retrievalConfiguration': {
+                    #     'vectorSearchConfiguration': {
+                    #         'numberOfResults': numberOfResults,
+                    #         'overrideSearchType': "SEMANTIC", # optional'
+                    #     }
+                    # },
+                    # 'generationConfiguration': {
+                    #     'promptTemplate': {
+                    #         'textPromptTemplate': promptTemplate
+                    #     }
+                    # }
                 }
             }
         )
@@ -50,7 +86,8 @@ def retrieveAndGenerate(input, kbId, model_arn, sessionId=None):
 def lambda_handler(event, context):
     query = event["question"]
     session_id = event["sessionid"]
-    response = retrieveAndGenerate(query, kb_id, model_arn, session_id)
+    numberOfResults = 12
+    response = retrieveAndGenerate(query, kb_id,numberOfResults,promptTemplate, model_arn, session_id)
     generated_text = response['output']['text']
     print(generated_text)
 
