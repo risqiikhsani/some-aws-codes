@@ -28,8 +28,8 @@ $query$
 if you're asked in different language other than english , please answer it in that language as well.
 Assistant:
 """
-
-
+# https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agent-runtime/client/retrieve_and_generate.html
+# https://aws.amazon.com/blogs/machine-learning/knowledge-bases-for-amazon-bedrock-now-supports-custom-prompts-for-the-retrieveandgenerate-api-and-configuration-of-the-maximum-number-of-retrieved-results/
 def retrieveAndGenerate(input, kbId,numberOfResults,promptTemplate, model_arn, sessionId=None):
     print(input, kbId, model_arn)
     if sessionId != "None":
