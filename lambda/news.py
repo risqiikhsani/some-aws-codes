@@ -54,7 +54,7 @@ def lambda_handler(event, context):
     logger.info("Received event: %s", json.dumps(event))
     
     try:
-        http_method = event.get("httpMethod")
+        http_method = event["httpMethod"]
         if http_method == "GET":
             return get_news(event)
         else:
@@ -67,7 +67,7 @@ def lambda_handler(event, context):
         logger.error(f"Unexpected error: {e}", exc_info=True)
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": f"Unexpected error: {str(e)}"})
+            "body": json.dumps({"error": f"Unexpected error: {e}"})
         }
 
 # Example event for testing locally
