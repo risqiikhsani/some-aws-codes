@@ -65,7 +65,7 @@ def update_user(user,data):
             ReturnValues="UPDATED_NEW"
         )
         logger.info(f"User updated successfully with ID: {user}")
-        return response_payload(None,'Post updated successfully')
+        return response_payload(None,'User updated successfully')
     except Exception as e:
         logger.error(f"Error updating user: {e}")
         return response_payload(f'Error updating user: {e}', None)
