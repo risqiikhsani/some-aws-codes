@@ -32,29 +32,32 @@ def check_authorization(post_id, user):
         
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
+    user = "test"
+    if "authorizer" in event["requestContext"]:
+        user = event["requestContext"]["authorizer"]["claims"]["sub"]
+        
     http_method = event['httpMethod']
     if http_method == 'POST':
-        return create_post(event)
+        return create_post(event,user)
     elif http_method == 'GET':
         if 'pathParameters' in event and event['pathParameters'] is not None and 'id' in event['pathParameters']:
             return get_post(event)
         else:
             return list_posts()
     elif http_method == 'PUT':
-        return update_post(event)
+        return update_post(event,user)
     elif http_method == 'DELETE':
-        return delete_post(event)
+        return delete_post(event,user)
     else:
         logger.error(f"Unsupported HTTP method: {http_method}")
         return response_payload("Method Not Allowed", None)
 
 
-def create_post(event):
+def create_post(event,user):
     logger.info("Creating a new post")
     data = json.loads(event['body'])
     post_id = str(uuid.uuid4())
     text = data['text']
-    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
     time_creation = datetime.utcnow().isoformat()
     
     try:
@@ -98,12 +101,11 @@ def list_posts():
         return response_payload(f'Error listing posts: {e}', None)
 
 
-def update_post(event):
+def update_post(event,user):
     logger.info("Updating a post")
     data = json.loads(event['body'])
     post_id = event['pathParameters']['id']
-    user = event["requestContext"]["authorizer"]["claims"]["sub"]
-    
+
     # authorized, error = check_authorization(post_id, user)
     # if not authorized:
     #     return response_payload(error, None)
@@ -135,10 +137,9 @@ def update_post(event):
         return response_payload(f'Error updating post: {e}', None)
 
 
-def delete_post(event):
+def delete_post(event,user):
     logger.info("Deleting a post")
     post_id = event['pathParameters']['id']
-    user = event["requestContext"]["authorizer"]["claims"]["sub"]
     
     # authorized, error = check_authorization(post_id, user)
     # if not authorized:
