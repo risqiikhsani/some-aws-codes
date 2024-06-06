@@ -35,37 +35,44 @@ def check_authorization(comment_id, user):
         
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
+    user = "test"
+    if "authorizer" in event["requestContext"]:
+        user = event["requestContext"]["authorizer"]["claims"]["sub"]
     http_method = event['httpMethod']
     if http_method == 'POST':
-        return create_comment(event)
+        return create_comment(event,user)
     elif http_method == 'GET':
         if 'pathParameters' in event and event['pathParameters'] is not None and 'id' in event['pathParameters']:
             return get_comment(event)
         else:
             return list_comments(event)
     elif http_method == 'PUT':
-        return update_comment(event)
+        return update_comment(event,user)
     elif http_method == 'DELETE':
-        return delete_comment(event)
+        return delete_comment(event,user)
     else:
         logger.error(f"Unsupported HTTP method: {http_method}")
         return response_payload("Method Not Allowed", None)
 
 
-def create_comment(event):
+def create_comment(event,user):
     logger.info("Creating a new comment")
     # Extract post_id from query parameters
-    try:
-        post_id = event['queryStringParameters']['post_id']
-    except KeyError:
-        error_message = "post_id not provided in the query parameters"
+    if event.get('queryStringParameters') is not None:
+        try:
+            post_id = event['queryStringParameters']['post_id']
+        except KeyError:
+            error_message = "post_id not provided in the query parameters"
+            logger.error(error_message)
+            return response_payload(error_message, None)
+    else:
+        error_message = "queryStringParameters not provided in the event"
         logger.error(error_message)
         return response_payload(error_message, None)
     
     data = json.loads(event['body'])
     comment_id = str(uuid.uuid4())
     text = data['text']
-    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
     time_creation = datetime.utcnow().isoformat()
     
     try:
@@ -104,15 +111,22 @@ def get_comment(event):
 def list_comments(event):
     logger.info("Listing all comments")
     # Extract post_id from query parameters
-    try:
-        post_id = event['queryStringParameters']['post_id']
-    except KeyError:
-        error_message = "post_id not provided in the query parameters"
+    if event.get('queryStringParameters') is not None:
+        try:
+            post_id = event['queryStringParameters']['post_id']
+        except KeyError:
+            error_message = "post_id not provided in the query parameters"
+            logger.error(error_message)
+            return response_payload(error_message, None)
+    else:
+        error_message = "queryStringParameters not provided in the event"
         logger.error(error_message)
         return response_payload(error_message, None)
-    
+
     try:
-        response = table.query(KeyConditionExpression=boto3.dynamodb.conditions.Key('post_id').eq(post_id))
+        response = table.scan(
+            FilterExpression=boto3.dynamodb.conditions.Attr('post_id').eq(post_id)
+        )
         logger.info(f"Found {len(response['Items'])} comments")
         return response_payload(None, response['Items'])
     except ClientError as e:
@@ -121,11 +135,10 @@ def list_comments(event):
     logger.info("Done listing all comments")
 
 
-def update_comment(event):
+def update_comment(event,user):
     logger.info("Updating a comment")
     data = json.loads(event['body'])
     comment_id = event['pathParameters']['id']
-    user = event["requestContext"]["authorizer"]["claims"]["sub"]
     
     # authorized, error = check_authorization(comment_id, user)
     # if not authorized:
@@ -159,10 +172,9 @@ def update_comment(event):
     logger.info("Done updating a comment")
 
 
-def delete_comment(event):
+def delete_comment(event,user):
     logger.info("Deleting a comment")
     comment_id = event['pathParameters']['id']
-    user = event["requestContext"]["authorizer"]["claims"]["sub"]
     
     # authorized, error = check_authorization(comment_id, user)
     # if not authorized:
