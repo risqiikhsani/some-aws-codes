@@ -1,5 +1,6 @@
 import json
 import uuid
+import time
 import boto3
 from botocore.exceptions import ClientError
 import logging
@@ -13,6 +14,12 @@ logger.setLevel("INFO")
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('likes')
 
+def generate_unique_like_id():
+    timestamp = int(time.time() * 1000)  # Current time in milliseconds
+    random_uuid = uuid.uuid4()  # Generate a random UUID
+    unique_id = f"like_{timestamp}_{random_uuid}"
+    return unique_id
+    
 def check_authorization(like_id, user):
     logger.info("Checking user authorization")
     try:
@@ -73,12 +80,19 @@ def list_likes(event,user):
 def create_like(event,user):
     logger.info("Creating like")
     # Extract post_id from query parameters
+    # Extract post_id and comment_id from query parameters
+    # Extract query string parameters safely
+    query_string_parameters = event.get('queryStringParameters', {})
 
-    # Extract post_id and like_id from query parameters
-    post_id = event['queryStringParameters'].get('post_id', '')
-    comment_id = event['queryStringParameters'].get('comment_id', '')
+    # Check if query_string_parameters is None
+    if query_string_parameters is None:
+        query_string_parameters = {}
 
-    # Ensure at least one of post_id or like_id is provided
+    # Extract post_id and comment_id from query parameters
+    post_id = query_string_parameters.get('post_id', None)
+    comment_id = query_string_parameters.get('comment_id', None)
+
+    # Ensure at least one of post_id or comment_id is provided
     if not post_id and not comment_id:
         error_message = "Either post_id or comment_id must be provided"
         logger.error(error_message)
@@ -86,35 +100,33 @@ def create_like(event,user):
     
     # Check if the user has already liked the post or comment
     # Check if the user has already liked the post or comment
-    existing_like = None
+    
+    post_or_comment_associated_id = None
     if post_id:
-        existing_like = table.scan(
-            FilterExpression=(
-                Attr('post_id').eq(post_id) &
-                Attr('user').eq(user)
-            )
-        )
+        post_or_comment_associated_id = post_id
     
     if comment_id:
-        existing_like = table.scan(
-            FilterExpression=(
-                Attr('comment_id').eq(comment_id) &
-                Attr('user').eq(user)
-            )
+        post_or_comment_associated_id = comment_id
+    
+    existing_like = None
+    existing_like = table.scan(
+        FilterExpression=(
+            Attr('associated_id').eq(post_or_comment_associated_id) &
+            Attr('user').eq(user)
         )
+    )
     
     if existing_like and existing_like.get('Items'):
         logger.info(f"User {user} has already liked the post {post_id} or comment {comment_id}")
         return response_payload("User has already liked this post or comment", None)
 
-    id = str(uuid.uuid4())
+    id = str(generate_unique_like_id())
     time_creation = datetime.utcnow().isoformat()
     
     try:
         table.put_item(Item={
         'id': id, 
-        'post_id':post_id,
-        'comment_id':comment_id,
+        'associated_id':post_or_comment_associated_id,
         'time_creation': time_creation,
         'user': user, })
         logger.info(f"like created successfully with ID: {id}")
@@ -132,8 +144,15 @@ def delete_like(event,user):
     # if not authorized:
     #     return response_payload(error, None)
     
-    post_id = event['queryStringParameters'].get('post_id', '')
-    comment_id = event['queryStringParameters'].get('comment_id', '')
+    query_string_parameters = event.get('queryStringParameters', {})
+
+    # Check if query_string_parameters is None
+    if query_string_parameters is None:
+        query_string_parameters = {}
+
+    # Extract post_id and comment_id from query parameters
+    post_id = query_string_parameters.get('post_id', None)
+    comment_id = query_string_parameters.get('comment_id', None)
 
     # Ensure at least one of post_id or like_id is provided
     if not post_id and not comment_id:
