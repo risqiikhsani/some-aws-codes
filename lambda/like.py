@@ -35,21 +35,23 @@ def check_authorization(like_id, user):
         
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
+    user = "test"
+    if "authorizer" in event["requestContext"]:
+        user = event["requestContext"]["authorizer"]["claims"]["sub"]
     http_method = event['httpMethod']
     if http_method == 'GET':
         if event["path"] == "/add":
-            return create_like(event)
+            return create_like(event,user)
         elif event["path"] == "/remove":
-            return delete_like(event)
+            return delete_like(event,user)
         elif event["path"] == "/mine":
-            return list_likes(event)
+            return list_likes(event,user)
     else:
         logger.error(f"Unsupported HTTP method: {http_method}")
         return response_payload("Method Not Allowed", None)
         
-def list_likes(event):
+def list_likes(event,user):
     logger.info("Listing all user likes")
-    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
     
     try:
         response = table.scan(
@@ -63,32 +65,41 @@ def list_likes(event):
 
 
 
-def create_like(event):
+def create_like(event,user):
     logger.info("Creating like")
     # Extract post_id from query parameters
 
     # Extract post_id and like_id from query parameters
     post_id = event['queryStringParameters'].get('post_id', '')
-    like_id = event['queryStringParameters'].get('like_id', '')
+    comment_id = event['queryStringParameters'].get('comment_id', '')
 
     # Ensure at least one of post_id or like_id is provided
-    if not post_id and not like_id:
-        error_message = "Either post_id or like_id must be provided"
+    if not post_id and not comment_id:
+        error_message = "Either post_id or comment_id must be provided"
         logger.error(error_message)
         return response_payload(error_message, None)
+    
+    # Check if the user has already liked the post or comment
+    existing_like = table.get_item(
+        Key={'post_id': post_id, 'comment_id': comment_id, 'user': user},
+        ProjectionExpression='id'
+    )
 
-    like_id = str(uuid.uuid4())
+    if 'Item' in existing_like:
+        logger.info(f"User {user} has already liked the post {post_id} or comment {comment_id}")
+        return response_payload("User has already liked this post or comment", None)
+
+    id = str(uuid.uuid4())
     time_creation = datetime.utcnow().isoformat()
-    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
     
     try:
         table.put_item(Item={
-        'id': like_id, 
+        'id': id, 
         'post_id':post_id,
-        'like_id':like_id,
+        'comment_id':comment_id,
         'time_creation': time_creation,
         'user': user, })
-        logger.info(f"like created successfully with ID: {like_id}")
+        logger.info(f"like created successfully with ID: {id}")
         return response_payload(None, 'like created successfully')
     except Exception as e:
         logger.error(f"Error creating like: {e}")
@@ -97,28 +108,25 @@ def create_like(event):
 
 
     
-def delete_like(event):
+def delete_like(event,user):
     logger.info("Delete like")
     # authorized, error = check_authorization(post_id, user)
     # if not authorized:
     #     return response_payload(error, None)
     
-    # Extract post_id and like_id from query parameters
     post_id = event['queryStringParameters'].get('post_id', '')
-    like_id = event['queryStringParameters'].get('like_id', '')
+    comment_id = event['queryStringParameters'].get('comment_id', '')
 
     # Ensure at least one of post_id or like_id is provided
-    if not post_id and not like_id:
-        error_message = "Either post_id or like_id must be provided"
+    if not post_id and not comment_id:
+        error_message = "Either post_id or comment_id must be provided"
         logger.error(error_message)
         return response_payload(error_message, None)
-
-    user = event["requestContext"]["authorizer"]["claims"]["sub"] | None
     
     try:
-        if like_id:
-            key = {'like_id': like_id, 'user': user}
-            delete_condition = "Deleting like by like_id"
+        if comment_id:
+            key = {'comment_id': comment_id, 'user': user}
+            delete_condition = "Deleting like by comment_id"
         elif post_id:
             key = {'post_id': post_id, 'user': user}
             delete_condition = "Deleting like by post_id"
