@@ -4,6 +4,7 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 from datetime import datetime
+from boto3.dynamodb.conditions import Attr
 
 # Set up logging
 logger = logging.getLogger()
@@ -39,13 +40,17 @@ def lambda_handler(event, context):
     if "authorizer" in event["requestContext"]:
         user = event["requestContext"]["authorizer"]["claims"]["sub"]
     http_method = event['httpMethod']
+    resource = event['resource']  # Get the resource from the event
+
     if http_method == 'GET':
-        if event["path"] == "/add":
-            return create_like(event,user)
-        elif event["path"] == "/remove":
-            return delete_like(event,user)
-        elif event["path"] == "/mine":
-            return list_likes(event,user)
+        if resource == '/likes/add':
+            return create_like(event, user)
+        elif resource == '/likes/remove':
+            return delete_like(event, user)
+        elif resource == '/likes/mine':
+            return list_likes(event, user)
+        else:
+            return response_payload("wrong url path", None)
     else:
         logger.error(f"Unsupported HTTP method: {http_method}")
         return response_payload("Method Not Allowed", None)
@@ -80,12 +85,25 @@ def create_like(event,user):
         return response_payload(error_message, None)
     
     # Check if the user has already liked the post or comment
-    existing_like = table.get_item(
-        Key={'post_id': post_id, 'comment_id': comment_id, 'user': user},
-        ProjectionExpression='id'
-    )
-
-    if 'Item' in existing_like:
+    # Check if the user has already liked the post or comment
+    existing_like = None
+    if post_id:
+        existing_like = table.scan(
+            FilterExpression=(
+                Attr('post_id').eq(post_id) &
+                Attr('user').eq(user)
+            )
+        )
+    
+    if comment_id:
+        existing_like = table.scan(
+            FilterExpression=(
+                Attr('comment_id').eq(comment_id) &
+                Attr('user').eq(user)
+            )
+        )
+    
+    if existing_like and existing_like.get('Items'):
         logger.info(f"User {user} has already liked the post {post_id} or comment {comment_id}")
         return response_payload("User has already liked this post or comment", None)
 
