@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 import logging
 from datetime import datetime
 from boto3.dynamodb.conditions import Attr
-
+from boto3.dynamodb.conditions import Key
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -159,21 +159,52 @@ def delete_like(event,user):
         error_message = "Either post_id or comment_id must be provided"
         logger.error(error_message)
         return response_payload(error_message, None)
+        
+    post_or_comment_associated_id = None
+    if comment_id:
+        post_or_comment_associated_id = comment_id
+    if post_id:
+        post_or_comment_associated_id = post_id
+        
+    # delete
+    # Step 1: Query to get the partition key
+    response = table.scan(
+        FilterExpression=Key('associated_id').eq(post_or_comment_associated_id) & 
+        Attr("user").eq(user)
+    )
     
-    try:
-        if comment_id:
-            key = {'comment_id': comment_id, 'user': user}
-            delete_condition = "Deleting like by comment_id"
-        elif post_id:
-            key = {'post_id': post_id, 'user': user}
-            delete_condition = "Deleting like by post_id"
-
-        response = table.delete_item(Key=key)
-        logger.info(f"like deleted successfully. {delete_condition}")
-        return response_payload(None, 'like deleted successfully')
-    except Exception as e:
-        logger.error(f"Error delete like: {e}")
-        return response_payload(f'Error deleting like: {e}', None)
+    items = response.get('Items', [])
+    
+    if not items:
+        logger.error("No items found with the given sort key and attribute.")
+        return response_payload(f'Error deleting like, item not found', None)
+    else:
+        # Assuming the partition key is 'partitionKey'
+        partition_key_value = items[0]['id']
+    
+        # Step 2: Delete the item using the partition key and sort key
+        try:
+            table.delete_item(
+                Key={
+                    'id': partition_key_value,
+                    'associated_id': post_or_comment_associated_id
+                }
+            )
+            logger.info(f"like deleted successfully.")
+            return response_payload(None, 'like deleted successfully')
+        except Exception as e:
+            logger.error(f"Error delete like: {e}")
+            return response_payload(f'Error deleting like: {e}', None)
+    
+    # try:
+    #     key = {'associated_id': post_or_comment_associated_id, 'user': user}
+    #     delete_condition = f"associated_id :  {post_or_comment_associated_id}"
+    #     response = table.delete_item(Key=key)
+    #     logger.info(f"like deleted successfully. {delete_condition}")
+    #     return response_payload(None, 'like deleted successfully')
+    # except Exception as e:
+    #     logger.error(f"Error delete like: {e}")
+    #     return response_payload(f'Error deleting like: {e}', None)
     logger.info("Done deleting a new like")
 
 
