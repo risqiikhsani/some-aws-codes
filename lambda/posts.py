@@ -1,5 +1,6 @@
 import json
 import uuid
+import time
 import boto3
 from botocore.exceptions import ClientError
 import logging
@@ -11,6 +12,12 @@ logger.setLevel("INFO")
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('posts')
+
+def generate_unique_post_id():
+    timestamp = int(time.time() * 1000)  # Current time in milliseconds
+    random_uuid = uuid.uuid4()  # Generate a random UUID
+    unique_id = f"post_{timestamp}_{random_uuid}"
+    return unique_id
 
 def check_authorization(post_id, user):
     try:
@@ -56,7 +63,7 @@ def lambda_handler(event, context):
 def create_post(event,user):
     logger.info("Creating a new post")
     data = json.loads(event['body'])
-    post_id = str(uuid.uuid4())
+    post_id = str(generate_unique_post_id())
     text = data['text']
     time_creation = datetime.utcnow().isoformat()
     
