@@ -1,5 +1,6 @@
 import json
 import uuid
+import time
 import boto3
 from botocore.exceptions import ClientError
 import logging
@@ -11,6 +12,12 @@ logger.setLevel("INFO")
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('comments')
+
+def generate_unique_comment_id():
+    timestamp = int(time.time() * 1000)  # Current time in milliseconds
+    random_uuid = uuid.uuid4()  # Generate a random UUID
+    unique_id = f"comment_{timestamp}_{random_uuid}"
+    return unique_id
 
 def check_authorization(comment_id, user):
     logger.info("Checking user authorization")
@@ -71,7 +78,7 @@ def create_comment(event,user):
         return response_payload(error_message, None)
     
     data = json.loads(event['body'])
-    comment_id = str(uuid.uuid4())
+    comment_id = str(generate_unique_comment_id())
     text = data['text']
     time_creation = datetime.utcnow().isoformat()
     
