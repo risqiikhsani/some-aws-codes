@@ -14,15 +14,17 @@ table = dynamodb.Table('users')
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
-    print(event["requestContext"]["authorizer"]["claims"]["sub"])
+    user = "test"
+    if "authorizer" in event["requestContext"]:
+        print(event["requestContext"]["authorizer"]["claims"]["sub"])
+        user = event["requestContext"]["authorizer"]["claims"]["sub"]
+    
     http_method = event['httpMethod']
     if http_method == 'GET':
-        user_sub = event["requestContext"]["authorizer"]["claims"]["sub"]
-        return get_user(user_sub)
+        return get_user(user)
     elif http_method == 'PUT':
-        user_sub = event["requestContext"]["authorizer"]["claims"]["sub"]
         data = json.loads(event['body'])
-        return update_user(user_sub,data)
+        return update_user(user,data)
     else:
         logger.error(f"Unsupported HTTP method: {http_method}")
         return response_payload("Method Not Allowed", None)
