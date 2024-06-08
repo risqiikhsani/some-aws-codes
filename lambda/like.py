@@ -104,7 +104,7 @@ def count_likes(event):
     
     if existing_like and existing_like.get('Items'):
         # return the number of likes
-        num_likes = len(existing_likes['Items'])
+        num_likes = len(existing_like['Items'])
         return response_payload(None, num_likes)
     else:
         # return 0 likes
