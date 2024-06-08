@@ -101,12 +101,8 @@ def create_like(event,user):
     # Check if the user has already liked the post or comment
     # Check if the user has already liked the post or comment
     
-    post_or_comment_associated_id = None
-    if post_id:
-        post_or_comment_associated_id = post_id
-    
-    if comment_id:
-        post_or_comment_associated_id = comment_id
+    post_or_comment_associated_id = post_id if post_id else comment_id
+    logger.info(f"Using associated_id: {post_or_comment_associated_id}")
     
     existing_like = None
     existing_like = table.scan(
