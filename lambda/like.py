@@ -56,6 +56,8 @@ def lambda_handler(event, context):
             return delete_like(event, user)
         elif resource == '/likes/mine':
             return list_likes(event, user)
+        elif resource == '/likes/count':
+            return count_likes(event)
         else:
             return response_payload("wrong url path", None)
     else:
@@ -75,7 +77,40 @@ def list_likes(event,user):
         logger.error(f"Error listing likes for user {user}: {e}")
         return response_payload(f'Error listing likes for user {user}: {e}', None)
 
+def count_likes(event):
+    logger.info("Fetch number of likes based on associated_id")
 
+    query_string_parameters = event.get('queryStringParameters', {})
+
+    # Check if query_string_parameters is None
+    if query_string_parameters is None:
+        query_string_parameters = {}
+
+    # Extract post_id and comment_id from query parameters
+    associated_id = query_string_parameters.get('associated_id', None)
+
+    # Ensure at least one of post_id or comment_id is provided
+    if not associated_id:
+        error_message = "associated_id must be provided"
+        logger.error(error_message)
+        return response_payload(error_message, None)
+    
+    existing_like = None
+    existing_like = table.scan(
+        FilterExpression=(
+            Attr('associated_id').eq(associated_id)
+        )
+    )
+    
+    if existing_like and existing_like.get('Items'):
+        # return the number of likes
+        num_likes = len(existing_likes['Items'])
+        return response_payload(None, num_likes)
+    else:
+        # return 0 likes
+        return response_payload(None, 0)
+
+    logger.info("Done fetching the number of likes")
 
 def create_like(event,user):
     logger.info("Creating like")
