@@ -3,6 +3,7 @@ import uuid
 import boto3
 from botocore.exceptions import ClientError
 import logging
+import base64
 
 # Set up logging
 logger = logging.getLogger()
@@ -10,6 +11,9 @@ logger.setLevel("INFO")
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('users')
+
+s3 = boto3.client('s3')
+BUCKET_NAME = 'myapp-images-bucket'  # Replace with your S3 bucket name
 
 
 def lambda_handler(event, context):
@@ -45,6 +49,12 @@ def get_user(user):
 
 def update_user(user,data):
     logger.info("Updating a user")
+    
+    # Check if there is an image to upload
+    image_data = data.pop("profile_image", None)
+    if image_data:
+        image_url = upload_image_to_s3(user, image_data)
+        data["profile_image_url"] = image_url
 
     update_expression = "SET "
     expression_attribute_values = {}
@@ -72,7 +82,22 @@ def update_user(user,data):
         logger.error(f"Error updating user: {e}")
         return response_payload(f'Error updating user: {e}', None)
 
-
+def upload_image_to_s3(user_id, image_data):
+    try:
+        image_decoded = base64.b64decode(image_data)
+        image_key = f"profile_images/{user_id}/{uuid.uuid4()}.jpg"
+        s3.put_object(
+            Bucket=BUCKET_NAME,
+            Key=image_key,
+            Body=image_decoded,
+            ContentType='image/jpeg'
+        )
+        image_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{image_key}"
+        logger.info(f"Image uploaded successfully to {image_url}")
+        return image_url
+    except Exception as e:
+        logger.error(f"Error uploading image: {e}")
+        raise e
 
 
 
