@@ -5,13 +5,17 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 from datetime import datetime
-
+from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Key
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel("INFO")
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('posts')
+user_table = dynamodb.Table('users')
+like_table = dynamodb.Table('likes')
+comment_table = dynamodb.Table('comments')
 
 def generate_unique_post_id():
     timestamp = int(time.time() * 1000)  # Current time in milliseconds
@@ -80,6 +84,22 @@ def create_post(event,user):
         return response_payload(f'Error creating post: {e}', None)
 
 
+# def get_post(event):
+#     logger.info("Getting a post")
+#     post_id = event['pathParameters']['id']
+    
+#     try:
+#         response = table.get_item(Key={'id': post_id})
+#         if 'Item' in response:
+#             logger.info(f"Post found with ID: {post_id}")
+#             return response_payload(None, response['Item'])
+#         else:
+#             logger.info(f"Post not found with ID: {post_id}")
+#             return response_payload('Post not found', None)
+#     except ClientError as e:
+#         logger.error(f"Error getting post: {e}")
+#         return response_payload(f'Error getting post: {e}', None)
+
 def get_post(event):
     logger.info("Getting a post")
     post_id = event['pathParameters']['id']
@@ -88,7 +108,46 @@ def get_post(event):
         response = table.get_item(Key={'id': post_id})
         if 'Item' in response:
             logger.info(f"Post found with ID: {post_id}")
-            return response_payload(None, response['Item'])
+            post = response['Item']
+            user_id = post.get('user')
+            
+            # Fetch user details
+            user_response = user_table.get_item(Key={'id': user_id})
+            if 'Item' in user_response:
+                post['user_detail'] = user_response['Item']
+            else:
+                post['user_detail'] = None
+                
+            post_id = post.get('id')
+            existing_like = None
+            existing_like = like_table.scan(
+                FilterExpression=(
+                    Attr('associated_id').eq(post_id)
+                )
+            )
+            
+            if existing_like and existing_like.get('Items'):
+                # return the number of likes
+                num_likes = len(existing_like['Items'])
+                post['number_likes'] = num_likes
+            else:
+                post['number_likes'] = 0
+                
+            existing_comments = None
+            existing_comments = comment_table.scan(
+                FilterExpression=(
+                    Attr('post_id').eq(post_id)
+                )
+            )
+            
+            if existing_comments and existing_comments.get('Items'):
+                # return the number of likes
+                num_comments = len(existing_comments['Items'])
+                post['number_comments'] = num_comments
+            else:
+                post['number_comments'] = 0
+            
+            return response_payload(None, post)
         else:
             logger.info(f"Post not found with ID: {post_id}")
             return response_payload('Post not found', None)
@@ -97,12 +156,62 @@ def get_post(event):
         return response_payload(f'Error getting post: {e}', None)
 
 
+# def list_posts():
+#     logger.info("Listing all posts")
+#     try:
+#         response = table.scan()
+#         logger.info(f"Found {len(response['Items'])} posts")
+#         return response_payload(None, response['Items'])
+#     except ClientError as e:
+#         logger.error(f"Error listing posts: {e}")
+#         return response_payload(f'Error listing posts: {e}', None)
+
 def list_posts():
     logger.info("Listing all posts")
     try:
         response = table.scan()
-        logger.info(f"Found {len(response['Items'])} posts")
-        return response_payload(None, response['Items'])
+        posts = response.get('Items', [])
+        logger.info(f"Found {len(posts)} posts")
+        
+        # Fetch user details for each post
+        for post in posts:
+            user_id = post.get('user')
+            if user_id:
+                user_response = user_table.get_item(Key={'id': user_id})
+                if 'Item' in user_response:
+                    post['user_detail'] = user_response['Item']
+                else:
+                    post['user_detail'] = None
+            post_id = post.get('id')
+            existing_like = None
+            existing_like = like_table.scan(
+                FilterExpression=(
+                    Attr('associated_id').eq(post_id)
+                )
+            )
+            
+            if existing_like and existing_like.get('Items'):
+                # return the number of likes
+                num_likes = len(existing_like['Items'])
+                post['number_likes'] = num_likes
+            else:
+                post['number_likes'] = 0
+                
+            existing_comments = None
+            existing_comments = comment_table.scan(
+                FilterExpression=(
+                    Attr('post_id').eq(post_id)
+                )
+            )
+            
+            if existing_comments and existing_comments.get('Items'):
+                # return the number of likes
+                num_comments = len(existing_comments['Items'])
+                post['number_comments'] = num_comments
+            else:
+                post['number_comments'] = 0
+        
+        return response_payload(None, posts)
     except ClientError as e:
         logger.error(f"Error listing posts: {e}")
         return response_payload(f'Error listing posts: {e}', None)
