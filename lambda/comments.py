@@ -5,13 +5,16 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 from datetime import datetime
-
+from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Key
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel("INFO")
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('comments')
+user_table = dynamodb.Table('users')
+like_table = dynamodb.Table('likes')
 
 def generate_unique_comment_id():
     timestamp = int(time.time() * 1000)  # Current time in milliseconds
@@ -105,7 +108,30 @@ def get_comment(event):
         response = table.get_item(Key={'id': comment_id})
         if 'Item' in response:
             logger.info(f"comment found with ID: {comment_id}")
-            return response_payload(None, response['Item'])
+            comment = response['Item']
+            user_id = comment.get('user')
+            if user_id:
+                user_response = user_table.get_item(Key={'id': user_id})
+                if 'Item' in user_response:
+                    comment['user_detail'] = user_response['Item']
+                else:
+                    comment['user_detail'] = None
+            comment_id = comment.get('id')
+            existing_like = None
+            existing_like = like_table.scan(
+                FilterExpression=(
+                    Attr('associated_id').eq(comment_id)
+                )
+            )
+            
+            if existing_like and existing_like.get('Items'):
+                # return the number of likes
+                num_likes = len(existing_like['Items'])
+                comment['number_likes'] = num_likes
+            else:
+                comment['number_likes'] = 0
+                
+            return response_payload(None, comment)
         else:
             logger.info(f"comment not found with ID: {comment_id}")
             return response_payload('comment not found', None)
@@ -132,10 +158,36 @@ def list_comments(event):
 
     try:
         response = table.scan(
-            FilterExpression=boto3.dynamodb.conditions.Attr('post_id').eq(post_id)
+            FilterExpression=Attr('post_id').eq(post_id)
         )
+        comments = response.get('Items', [])
+        
+        for comment in comments:
+            user_id = comment.get('user')
+            if user_id:
+                user_response = user_table.get_item(Key={'id': user_id})
+                if 'Item' in user_response:
+                    comment['user_detail'] = user_response['Item']
+                else:
+                    comment['user_detail'] = None
+            comment_id = comment.get('id')
+            existing_like = None
+            existing_like = like_table.scan(
+                FilterExpression=(
+                    Attr('associated_id').eq(comment_id)
+                )
+            )
+            
+            if existing_like and existing_like.get('Items'):
+                # return the number of likes
+                num_likes = len(existing_like['Items'])
+                comment['number_likes'] = num_likes
+            else:
+                comment['number_likes'] = 0
+        
+        
         logger.info(f"Found {len(response['Items'])} comments")
-        return response_payload(None, response['Items'])
+        return response_payload(None, comments)
     except ClientError as e:
         logger.error(f"Error listing comments: {e}")
         return response_payload(f'Error listing comments: {e}', None)
