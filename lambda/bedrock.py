@@ -2,9 +2,44 @@
 
 import json
 import boto3
+import logging
+
+logger = logging.getLogger()
+logger.setLevel("INFO")
 
 # Let's use Amazon S3
 bedrock_runtime = boto3.client('bedrock-runtime')
+
+def response_payload(err, res=None):
+    if err:
+        error_message = str(err)
+        status_code = 502
+        response_body = {"error": {"message": error_message}}
+    else:
+        status_code = 200
+        response_body = res
+
+    return {
+        "statusCode": status_code,
+        "body": json.dumps(response_body),
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+    }
+    
+def lambda_handler(event, context):
+    logger.info(f"Received event: {event}")
+    user = "test"
+    if "authorizer" in event["requestContext"]:
+        user = event["requestContext"]["authorizer"]["claims"]["sub"]
+        
+    http_method = event['httpMethod']
+    if http_method == 'POST':
+        return get_message(event,user)
+    else:
+        logger.error(f"Unsupported HTTP method: {http_method}")
+        return response_payload("Method Not Allowed", None)
 
 def invoke_model(body, model_id, accept, content_type):
     """
@@ -34,7 +69,7 @@ def invoke_model(body, model_id, accept, content_type):
 
 # note, increase timeout lambda to long time in order to work (15 minutes)
 # https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages.html
-def lambda_handler(event, context):
+def get_message(event, user):
     # Extract the request body from the event
     body = json.loads(event["body"])
     messages = body["messages"]
@@ -58,17 +93,10 @@ def lambda_handler(event, context):
         print(response)
         response_body = json.loads(response.get("body").read())
         print(response_body.get("content"))
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps(response_body.get("content"))
-        }
+        return response_payload(None, response_body.get("content"))
     except Exception as e:
         print(f"Error: {e}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps('Internal Server Error')
-        }
+        return response_payload(f'Error get message: {e}', None)
     
     # messages
     # [
