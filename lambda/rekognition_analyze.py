@@ -4,14 +4,15 @@ import boto3
 from botocore.exceptions import ClientError
 import logging
 import base64
+import os
 
 client = boto3.client('rekognition')
 logger = logging.getLogger()
 logger.setLevel("INFO")
 BUCKET="myapp-images-bucket"
-PROJECT_ARN = 'arn:aws:rekognition:ap-southeast-2:730335214792:project/skin-diseases/1718021845211'
-VERSION_NAME = 'skin-diseases.2024-06-11T10.24.49'
-MODEL='arn:aws:rekognition:ap-southeast-2:730335214792:project/skin-diseases/version/skin-diseases.2024-06-11T10.24.49/1718076289548'
+PROJECT_ARN = os.environ.get("PROJECT_ARN")
+VERSION_NAME = os.environ.get("VERSION_NAME")
+MODEL = os.environ.get("MODEL")
 MIN_CONFIDENCE=50
 
 def response_payload(err, res=None):
