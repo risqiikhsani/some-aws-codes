@@ -1,13 +1,14 @@
 import json
 import boto3
 import logging
+import os
 
 client = boto3.client('rekognition')
 logger = logging.getLogger()
 logger.setLevel("INFO")
+PROJECT_ARN = os.environ.get("PROJECT_ARN")
+VERSION_NAME = os.environ.get("VERSION_NAME")
 
-PROJECT_ARN = 'arn:aws:rekognition:ap-southeast-2:730335214792:project/skin-diseases/1718021845211'
-VERSION_NAME = 'skin-diseases.2024-06-11T10.24.49'
 
 def response_payload(err, res=None):
     if err:
